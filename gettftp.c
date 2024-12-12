@@ -10,7 +10,7 @@
 
 int main(int argc,char *argv[]){
     if (argc != 3) {
-        fprintf(stderr, "Missing argument\n");
+        fprintf(stderr, "Missing argument(s)\n");
         exit(EXIT_FAILURE); 
     }
 
