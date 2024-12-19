@@ -105,7 +105,7 @@ int main(int argc,char *argv[]){
   const char *port = argv[2];
   const char *filename = argv[3];
 
-  //Set hints to get UDP server only with TCP and IPV4 
+//Set hints to get UDP server only on IPV4
   struct addrinfo hints, *res;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_INET;
@@ -134,35 +134,39 @@ int main(int argc,char *argv[]){
   socklen_t server_addrlen = sizeof(server_addr);
   int block_number = 1;
 
-     while (1) {
-     int recv_len = receive_with_timeout(sock, buffer, &server_addr, &server_addrlen);
-     if (recv_len < 0) {
-         printf("Timeout ou erreur lors de la réception\n");
-         break;
-     }
+    while (1) {
+    int recv_len = receive_with_timeout(sock, buffer, &server_addr, &server_addrlen);
+    
+    if (recv_len < 0) {//If the data reception failed or timed out
+        printf("Timeout ou erreur lors de la réception\n");
+        break;
+    }
 
-     if (buffer[1] == DATA) {
-         int received_block = (buffer[2] << 8) | buffer[3];
-         if (received_block != block_number) {
-             printf("Bloc inattendu : attendu %d, reçu %d\n", block_number, received_block);
-             break;
-         }
+    if (buffer[1] == DATA) {//If the received packet is a DATA packet
+        int received_block = (buffer[2] << 8) | buffer[3];
+        
+        if (received_block != block_number) {//Verify that the received block number matches the expected block number
+            printf("Bloc inattendu : attendu %d, reçu %d\n", block_number, received_block);
+            break;
+        }
+        //Subtract the header size from the total received length
+        int data_size = recv_len - 4;
+        fwrite(&buffer[4], 1, data_size, file);
+        //Write the received data (starting from the 5th byte) to the file
+        send_ack(sock, &server_addr, server_addrlen, block_number);
 
-         int data_size = recv_len - 4;
-         fwrite(&buffer[4], 1, data_size, file);
-         send_ack(sock, &server_addr, server_addrlen, block_number);
+        if (data_size < DEFAULT_BLOCKSIZE) {//End of the file
+            printf("Fin du fichier reçue\n");
+            break;
+        }
 
-         if (data_size < DEFAULT_BLOCKSIZE) {
-             printf("Fin du fichier reçue\n");
-             break;
-         }
+        block_number++;
+    } else if (buffer[1] == ERROR) {//If ERROR packet
+        printf("Erreur reçue : code %d\n", buffer[3]);
+        break;
+        }
+}
 
-         block_number++;
-     } else if (buffer[1] == ERROR) {
-         printf("Erreur reçue : code %d\n", buffer[3]);
-         break;
-     }
- }
 
  fclose(file);
  freeaddrinfo(res);
